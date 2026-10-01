@@ -6,7 +6,7 @@ local Window = Fluent:CreateWindow({
     Title = "All-In-One Master [spinach]",
     SubTitle = "ESP & Full Bright",
     TabWidth = 160,
-    Size = UDim2.fromOffset(500, 320),
+    Size = UDim2.fromOffset(500, 360),
     Acrylic = false,
     Theme = "Dark",
     MinimizeKey = Enum.KeyCode.LeftControl
@@ -25,6 +25,7 @@ local Camera = Workspace.CurrentCamera
 local LocalPlayer = Players.LocalPlayer
 
 local MasterActive = false
+local MaxESPDistance = 1000
 
 -- ==================== FULL BRIGHT ====================
 local FullBright = {
@@ -171,7 +172,7 @@ RunService.RenderStepped:Connect(function()
         if MasterActive and char and root and head and humanoid and humanoid.Health > 0 and localRoot then
             local dist = (localRoot.Position - root.Position).Magnitude
 
-            if dist <= 2000 then
+            if dist <= MaxESPDistance then
                 local rootPos2D, onScreen, depth = worldToViewport(root.Position)
 
                 if onScreen and depth > 0 then
@@ -226,7 +227,7 @@ RunService.RenderStepped:Connect(function()
     end
 end)
 
--- ==================== SINGLE MASTER BUTTON ====================
+-- ==================== CONTROLS ====================
 do
     Tabs.Main:AddParagraph({
         Title = "ระบบ ALL IN ONE",
@@ -242,6 +243,18 @@ do
         MasterActive = MasterToggle.Value
         setFullBright(MasterActive)
     end)
+
+    local DistSlider = Tabs.Main:AddSlider("ESPDistanceSlider", {
+        Title = "ระยะตรวจจับมองคน (เมตร)",
+        Description = "ปรับระยะมองเห็นผู้เล่น (50 - 5,000 ม.)",
+        Default = 1000,
+        Min = 50,
+        Max = 5000,
+        Rounding = 0,
+        Callback = function(val)
+            MaxESPDistance = val
+        end
+    })
 end
 
 SaveManager:SetLibrary(Fluent)
@@ -258,6 +271,6 @@ Window:SelectTab(1)
 
 Fluent:Notify({
     Title = "ALL IN ONE พร้อมใช้งาน",
-    Content = "กดปุ่มเดียวเพื่อเปิด/ปิด ESP + Full Bright ได้ทันที",
+    Content = "เพิ่มหลอดปรับระยะตรวจจับเรียบร้อยแล้ว",
     Duration = 5
 })
