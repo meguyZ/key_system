@@ -1,26 +1,263 @@
-{
-  "compilerOptions": {
-    "lib": ["dom", "dom.iterable", "esnext"],
-    "allowJs": true,
-    "skipLibCheck": true,
-    "strict": true,
-    "noEmit": true,
-    "esModuleInterop": true,
-    "module": "esnext",
-    "moduleResolution": "bundler",
-    "resolveJsonModule": true,
-    "isolatedModules": true,
-    "jsx": "preserve",
-    "incremental": true,
-    "plugins": [
-      {
-        "name": "next"
-      }
-    ],
-    "paths": {
-      "@/*": ["./*"]
-    }
-  },
-  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
-  "exclude": ["node_modules"]
+local Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
+local SaveManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/SaveManager.lua"))()
+local InterfaceManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/InterfaceManager.lua"))()
+
+local Window = Fluent:CreateWindow({
+    Title = "All-In-One Master [spinach]",
+    SubTitle = "ESP & Full Bright",
+    TabWidth = 160,
+    Size = UDim2.fromOffset(500, 320),
+    Acrylic = false,
+    Theme = "Dark",
+    MinimizeKey = Enum.KeyCode.LeftControl
+})
+
+local Tabs = {
+    Main = Window:AddTab({ Title = "หน้าหลัก", Icon = "home" }),
+    Settings = Window:AddTab({ Title = "การตั้งค่า", Icon = "settings" })
 }
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local Workspace = game:GetService("Workspace")
+local Lighting = game:GetService("Lighting")
+local Camera = Workspace.CurrentCamera
+local LocalPlayer = Players.LocalPlayer
+
+local MasterActive = false
+
+-- ==================== FULL BRIGHT ====================
+local FullBright = {
+    Connection = nil,
+    Originals = {
+        Brightness = Lighting.Brightness,
+        ClockTime = Lighting.ClockTime,
+        FogEnd = Lighting.FogEnd,
+        GlobalShadows = Lighting.GlobalShadows,
+        Ambient = Lighting.Ambient,
+        OutdoorAmbient = Lighting.OutdoorAmbient
+    }
+}
+
+local function applyFullBright()
+    Lighting.Brightness = 2
+    Lighting.ClockTime = 14
+    Lighting.FogEnd = 100000
+    Lighting.GlobalShadows = false
+    Lighting.Ambient = Color3.fromRGB(255, 255, 255)
+    Lighting.OutdoorAmbient = Color3.fromRGB(255, 255, 255)
+end
+
+local function restoreLighting()
+    Lighting.Brightness = FullBright.Originals.Brightness
+    Lighting.ClockTime = FullBright.Originals.ClockTime
+    Lighting.FogEnd = FullBright.Originals.FogEnd
+    Lighting.GlobalShadows = FullBright.Originals.GlobalShadows
+    Lighting.Ambient = FullBright.Originals.Ambient
+    Lighting.OutdoorAmbient = FullBright.Originals.OutdoorAmbient
+end
+
+local function setFullBright(state)
+    if state then
+        applyFullBright()
+        if not FullBright.Connection then
+            FullBright.Connection = Lighting.LightingChanged:Connect(function()
+                if MasterActive then
+                    applyFullBright()
+                end
+            end)
+        end
+    else
+        if FullBright.Connection then
+            FullBright.Connection:Disconnect()
+            FullBright.Connection = nil
+        end
+        restoreLighting()
+    end
+end
+
+-- ==================== ESP SYSTEM ====================
+local SkeletonBones = {
+    R15 = {
+        {"Head", "UpperTorso"},
+        {"UpperTorso", "LowerTorso"},
+        {"LowerTorso", "LeftUpperLeg"},
+        {"LeftUpperLeg", "LeftLowerLeg"},
+        {"LeftLowerLeg", "LeftFoot"},
+        {"LowerTorso", "RightUpperLeg"},
+        {"RightUpperLeg", "RightLowerLeg"},
+        {"RightLowerLeg", "RightFoot"},
+        {"UpperTorso", "LeftUpperArm"},
+        {"LeftUpperArm", "LeftLowerArm"},
+        {"LeftLowerArm", "LeftHand"},
+        {"UpperTorso", "RightUpperArm"},
+        {"RightUpperArm", "RightLowerArm"},
+        {"RightLowerArm", "RightHand"}
+    },
+    R6 = {
+        {"Head", "Torso"},
+        {"Torso", "Left Leg"},
+        {"Torso", "Right Leg"},
+        {"Torso", "Left Arm"},
+        {"Torso", "Right Arm"}
+    }
+}
+
+local ESPObjects = {}
+
+local function createESP(player)
+    if player == LocalPlayer then return end
+
+    local esp = {
+        Player = player,
+        Text = Drawing.new("Text"),
+        Bones = {}
+    }
+
+    esp.Text.Center = true
+    esp.Text.Outline = true
+    esp.Text.OutlineColor = Color3.fromRGB(0, 0, 0)
+    esp.Text.Size = 14
+    esp.Text.Color = Color3.fromRGB(255, 60, 60)
+    esp.Text.Visible = false
+
+    for i = 1, 15 do
+        local line = Drawing.new("Line")
+        line.Thickness = 1.5
+        line.Color = Color3.fromRGB(255, 255, 255)
+        line.Visible = false
+        table.insert(esp.Bones, line)
+    end
+
+    ESPObjects[player] = esp
+end
+
+local function removeESP(player)
+    local esp = ESPObjects[player]
+    if esp then
+        pcall(function()
+            esp.Text:Remove()
+            for _, line in ipairs(esp.Bones) do
+                line:Remove()
+            end
+        end)
+        ESPObjects[player] = nil
+    end
+end
+
+for _, p in ipairs(Players:GetPlayers()) do
+    createESP(p)
+end
+
+Players.PlayerAdded:Connect(createESP)
+Players.PlayerRemoving:Connect(removeESP)
+
+local function worldToViewport(pos)
+    local screenPos, onScreen = Camera:WorldToViewportPoint(pos)
+    return Vector2.new(screenPos.X, screenPos.Y), onScreen, screenPos.Z
+end
+
+RunService.RenderStepped:Connect(function()
+    local localRoot = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+    
+    for player, esp in pairs(ESPObjects) do
+        local char = player.Character
+        local root = char and char:FindFirstChild("HumanoidRootPart")
+        local head = char and char:FindFirstChild("Head")
+        local humanoid = char and char:FindFirstChildOfClass("Humanoid")
+
+        local visible = false
+
+        if MasterActive and char and root and head and humanoid and humanoid.Health > 0 and localRoot then
+            local dist = (localRoot.Position - root.Position).Magnitude
+
+            if dist <= 2000 then
+                local rootPos2D, onScreen, depth = worldToViewport(root.Position)
+
+                if onScreen and depth > 0 then
+                    visible = true
+
+                    local headPos2D = worldToViewport(head.Position + Vector3.new(0, 0.6, 0))
+
+                    -- Name + Distance
+                    local nameStr = player.DisplayName or player.Name
+                    esp.Text.Text = string.format("%s [%d ม.]", nameStr, math.floor(dist))
+                    esp.Text.Position = Vector2.new(rootPos2D.X, headPos2D.Y - 18)
+                    esp.Text.Visible = true
+
+                    -- Skeleton
+                    local isR15 = humanoid.RigType == Enum.HumanoidRigType.R15
+                    local bones = isR15 and SkeletonBones.R15 or SkeletonBones.R6
+
+                    for i, pair in ipairs(bones) do
+                        local partA = char:FindFirstChild(pair[1])
+                        local partB = char:FindFirstChild(pair[2])
+                        local line = esp.Bones[i]
+
+                        if line and partA and partB then
+                            local posA, onA = worldToViewport(partA.Position)
+                            local posB, onB = worldToViewport(partB.Position)
+
+                            if onA or onB then
+                                line.From = posA
+                                line.To = posB
+                                line.Visible = true
+                            else
+                                line.Visible = false
+                            end
+                        elseif line then
+                            line.Visible = false
+                        end
+                    end
+
+                    for i = #bones + 1, #esp.Bones do
+                        esp.Bones[i].Visible = false
+                    end
+                end
+            end
+        end
+
+        if not visible then
+            esp.Text.Visible = false
+            for _, line in ipairs(esp.Bones) do
+                line.Visible = false
+            end
+        end
+    end
+end)
+
+-- ==================== SINGLE MASTER BUTTON ====================
+do
+    Tabs.Main:AddParagraph({
+        Title = "ระบบ ALL IN ONE",
+        Content = "ปุ่มเดียวเปิด-ปิดครบทุกระบบ:\n• ESP ชื่อผู้เล่น + ระยะทาง\n• ESP โครงกระดูกผู้เล่น (Skeleton)\n• Full Bright (สว่างชัดเจน ลบหมอก ลบเงา)"
+    })
+
+    local MasterToggle = Tabs.Main:AddToggle("MasterAIO", {
+        Title = "เปิด / ปิด ALL IN ONE (ESP + Full Bright)",
+        Default = false
+    })
+
+    MasterToggle:OnChanged(function()
+        MasterActive = MasterToggle.Value
+        setFullBright(MasterActive)
+    end)
+end
+
+SaveManager:SetLibrary(Fluent)
+InterfaceManager:SetLibrary(Fluent)
+SaveManager:IgnoreThemeSettings()
+SaveManager:SetIgnoreIndexes({})
+InterfaceManager:SetFolder("FluentScriptHub")
+SaveManager:SetFolder("FluentScriptHub/AIO_Single")
+
+InterfaceManager:BuildInterfaceSection(Tabs.Settings)
+SaveManager:BuildConfigSection(Tabs.Settings)
+
+Window:SelectTab(1)
+
+Fluent:Notify({
+    Title = "ALL IN ONE พร้อมใช้งาน",
+    Content = "กดปุ่มเดียวเพื่อเปิด/ปิด ESP + Full Bright ได้ทันที",
+    Duration = 5
+})
